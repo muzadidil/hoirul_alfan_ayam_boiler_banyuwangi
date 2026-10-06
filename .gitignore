@@ -1,0 +1,19 @@
+# hasil skrip lokal (berisi data keuangan)
+keluaran/
+backup/
+
+# kunci & kredensial — jangan pernah di-commit
+kunci/
+*-sa.json
+serviceAccount*.json
+*.pem
+
+# python / node
+.venv/
+venv/
+__pycache__/
+node_modules
+
+# firebase emulator
+*.log
+firebase/.firebase/
