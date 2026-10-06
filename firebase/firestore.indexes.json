@@ -1,0 +1,9 @@
+{
+  "indexes": [],
+  "fieldOverrides": [
+    { "collectionGroup": "transaksi", "fieldPath": "ketLengkap", "indexes": [] },
+    { "collectionGroup": "transaksi", "fieldPath": "ketPendek", "indexes": [] },
+    { "collectionGroup": "transaksi", "fieldPath": "ketAsli", "indexes": [] },
+    { "collectionGroup": "transaksi", "fieldPath": "sumber", "indexes": [] }
+  ]
+}

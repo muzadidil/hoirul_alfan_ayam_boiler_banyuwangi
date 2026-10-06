@@ -1,0 +1,112 @@
+rules_version = '2';
+
+// Aturan keamanan Firestore ZASHA MUTASI.
+// Peran dibaca dari custom claims `peran` (diatur alat/peran.py).
+// Sengaja TANPA get()/exists(): satu runTransaction pindah massal menulis 200 transaksi
+// + 1 bulan + 1 riwayat, sedangkan batas akses dokumen rules hanya 20 per request.
+// Data hanya masuk lewat skrip (Admin SDK, tidak terikat rules); browser tidak bisa
+// membuat atau menghapus bulan/transaksi.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function masuk()   { return request.auth != null && request.auth.token.email_verified == true; }
+    function peran()   { return request.auth.token.get('peran', ''); }
+    function pembaca() { return masuk() && peran() in ['admin', 'editor', 'pembaca']; }
+    function editor()  { return masuk() && peran() in ['admin', 'editor']; }
+    function admin()   { return masuk() && peran() == 'admin'; }
+
+    // Kedua daftar ini HARUS sama dengan pengaturan/kategori.kode dan pengaturan/entitas.kode.
+    function daftarKategori() {
+      return ['KOSONG', 'PRIBADI', 'PRODUKSI', 'EXSPEDISI', 'V_SALES', 'OPERASIONAL', 'NURUL_AINI', 'BANK'];
+    }
+    function daftarEntitas() {
+      return ['BELUM', 'PRIBADI', 'CV', 'PT'];
+    }
+    function kategoriSah(k) { return k in daftarKategori(); }
+    function entitasSah(e)  { return e in daftarEntitas(); }
+
+    function hanyaUbah(kunci) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(kunci);
+    }
+
+    function petaKategori(m) { return m is map && m.keys().hasOnly(daftarKategori()); }
+    function petaEntitas(m)  { return m is map && m.keys().hasOnly(daftarEntitas()); }
+    function petaEntitasKategori(m) {
+      return petaEntitas(m)
+        && petaKategori(m.get('BELUM', {}))
+        && petaKategori(m.get('PRIBADI', {}))
+        && petaKategori(m.get('CV', {}))
+        && petaKategori(m.get('PT', {}));
+    }
+    function ringkasanSah(d) {
+      return petaKategori(d.debetSenPerKategori)
+        && petaKategori(d.kreditSenPerKategori)
+        && petaKategori(d.jumlahPerKategori)
+        && petaEntitas(d.debetSenPerEntitas)
+        && petaEntitas(d.kreditSenPerEntitas)
+        && petaEntitas(d.jumlahPerEntitas)
+        && petaEntitasKategori(d.debetSenPerEntitasKategori)
+        && petaEntitasKategori(d.kreditSenPerEntitasKategori);
+    }
+
+    function jejakTransaksi(d) {
+      return d.diubahOleh == request.auth.uid
+        && d.diubahOlehEmail == request.auth.token.email
+        && d.diubahPada == request.time;
+    }
+
+    function riwayatSah(d) {
+      return d.keys().hasOnly(['waktu', 'olehUid', 'olehEmail', 'jenis', 'ke', 'dari',
+                               'idTransaksi', 'jumlah', 'totalSen'])
+        && d.olehUid == request.auth.uid
+        && d.olehEmail == request.auth.token.email
+        && d.waktu == request.time
+        && d.jenis in ['ubah_kategori', 'ubah_entitas', 'hitung_ulang']
+        && d.idTransaksi is list
+        && d.idTransaksi.size() <= 200
+        && (d.jenis != 'ubah_kategori' || kategoriSah(d.get('ke', null)))
+        && (d.jenis != 'ubah_entitas' || entitasSah(d.get('ke', null)))
+        && (d.get('ke', null) == null || d.ke is string)
+        && d.get('dari', {}) is map
+        && d.get('jumlah', 0) is int
+        && d.get('totalSen', 0) is int;
+    }
+
+    match /pengaturan/{id} {
+      allow read: if pembaca();
+      allow write: if admin();
+    }
+
+    match /bulan/{bulanId} {
+      allow read: if pembaca();
+      allow update: if editor()
+        && hanyaUbah(['debetSenPerKategori', 'kreditSenPerKategori', 'jumlahPerKategori',
+                      'debetSenPerEntitas', 'kreditSenPerEntitas', 'jumlahPerEntitas',
+                      'debetSenPerEntitasKategori', 'kreditSenPerEntitasKategori',
+                      'diperbaruiOleh', 'diperbaruiPada'])
+        && ringkasanSah(request.resource.data)
+        && request.resource.data.diperbaruiOleh == request.auth.uid
+        && request.resource.data.diperbaruiPada == request.time;
+
+      match /transaksi/{trxId} {
+        allow read: if pembaca();
+        allow update: if editor()
+          && hanyaUbah(['kategori', 'entitas', 'diubahOleh', 'diubahOlehEmail', 'diubahPada'])
+          && kategoriSah(request.resource.data.kategori)
+          && entitasSah(request.resource.data.entitas)
+          && jejakTransaksi(request.resource.data);
+      }
+
+      match /riwayat/{riwayatId} {
+        allow read: if pembaca();
+        allow create: if editor() && riwayatSah(request.resource.data);
+      }
+    }
+
+    match /impor/{id} {
+      allow read: if admin();
+    }
+
+    // Path lain tidak punya aturan, jadi otomatis ditolak.
+  }
+}

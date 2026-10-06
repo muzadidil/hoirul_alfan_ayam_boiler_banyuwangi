@@ -1,0 +1,14 @@
+{
+  "name": "zasha-uji-aturan",
+  "private": true,
+  "type": "module",
+  "description": "Uji Firestore Security Rules ZASHA MUTASI di emulator",
+  "scripts": {
+    "test": "node --test --test-concurrency=1 aturan.test.mjs",
+    "uji": "firebase emulators:exec --config ../firebase.json --project demo-zasha-uji --only firestore \"npm test\""
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.2",
+    "firebase": "12.19.0"
+  }
+}
