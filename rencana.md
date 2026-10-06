@@ -23,7 +23,7 @@ Semua bisa diubah. Kalau diubah, sesuaikan tahap terkait.
 | Skrip | Python 3 (`openpyxl` + `firebase-admin`), dijalankan di komputer lokal. |
 | Nominal | Disimpan sebagai **integer sen** (`debetSen`, `kreditSen`, `saldoSen`) supaya penjumlahan tidak menumpuk galat pembulatan. |
 | Angka laporan | **Dihitung dari transaksi**, bukan disalin dari `J1` atau `BANK_GLOBAL` (keduanya terbukti salah, lihat "Temuan Data"). |
-| Kategori JUL–DES | Diimpor sebagai **`KOSONG` (belum kategori)**. Kategori lama tetap disimpan di `kategoriAsal`, jadi bisa dikembalikan. Alasannya ada di "Temuan Data". |
+| Kategori APR, MEI, JUL–DES | Diimpor sebagai **`KOSONG` (belum kategori)**. Kategori lama tetap disimpan di `kategoriAsal`, jadi bisa dikembalikan. Alasannya ada di "Temuan Data". |
 
 **Kenapa dua repo.** Di akun GitHub gratis, Pages hanya bisa dari repo publik, sedangkan file Excel tidak boleh publik. Situs Pages juga selalu bisa dibuka siapa saja (bahkan dengan GitHub Pro). Karena itu keamanan data dijaga oleh **login + Firestore Security Rules**. Konfigurasi Firebase (`apiKey` dll.) memang aman untuk terlihat publik.
 
@@ -269,7 +269,7 @@ Syarat agar hemat: satu bulan dimuat **sekali per sesi** lalu disimpan di memori
 - [ ] Kredensial untuk skrip lokal, pilih salah satu:
   - Tanpa file kunci (disarankan): pasang Google Cloud CLI, lalu `gcloud auth application-default login`.
   - Atau Project settings → Service accounts → Generate new private key. Simpan **di luar folder repo** (misalnya `~/.config/zasha/sa.json`) dan arahkan `GOOGLE_APPLICATION_CREDENTIALS` ke file itu. Hapus kunci ini setelah migrasi selesai.
-- [ ] Pasang Firebase CLI (`npm i -g firebase-tools`). Isi folder `firebase/`, uji rules di emulator (`firebase emulators:start --only firestore`), lalu deploy: `firebase deploy --only firestore:rules,firestore:indexes`.
+- [ ] Pasang Firebase CLI (`npm i -g firebase-tools`) dan Java (dibutuhkan emulator Firestore). Isi folder `firebase/`, uji rules di emulator (`firebase emulators:start --only firestore`), lalu deploy: `firebase deploy --only firestore:rules,firestore:indexes`.
 - [ ] Google Cloud Console → APIs & Services → Credentials → batasi API key ke HTTP referrer `https://muzadidil.github.io/*`, domain sendiri (Tahap 6), dan `http://localhost:*`.
 
 `firebase/firestore.indexes.json`: matikan indeks untuk teks panjang supaya penyimpanan lebih hemat.
@@ -326,16 +326,21 @@ Kolom tab master: A tanggal, B keterangan pendek, C keterangan lengkap, D debet,
    - Tanggal berupa teks `YYYY-MM-DD` (JUN, ±346 sel) diparse dengan aturan yang sama.
    - Validasi hari ≤ jumlah hari bulan itu.
    - Hasilnya, semua transaksi punya tanggal dan urut naik sepanjang tahun.
-7. **Nominal**: D dan E → `round(nilai × 100)` sebagai integer sen. Teks angka (`"1,234,567.00"`) diparse dulu (±3 sel di FEB). `jenis` diambil dari kolom F, atau dari kolom yang terisi kalau F kosong.
-8. **Kolom B kosong** tapi C ada: isi B dari C.
+7. **Nominal**: D dan E → `round(nilai × 100)` sebagai integer sen. Teks angka (`"1,234,567.00"`) diparse dulu (±3 sel di FEB). `jenis` = `DB` kalau debet > 0, `CR` kalau kredit > 0. Kolom F diabaikan, karena 468 baris tidak punya F (meski tidak pernah bertentangan).
+8. **Keterangan**:
+   - Kolom B kosong tapi C ada: isi B dari C (FEB, 3 baris).
+   - `ketPendek` = B.
+   - `ketLengkap` = C kalau C diawali B (pola JAN); selain itu **B + spasi + C** (pola FEB–DES, karena di sana C hanya sisa setelah jenis transaksi).
+   - C yang tertimpa label `SALDO AWAL : MUTASI CR : ...` (baris terakhir APR, JUL, OKT, NOV, DES): `ketLengkap` = B.
+   - Rapikan spasi berlebih.
 9. **Baris `BUNGA` yang tercatat di debet**: pindahkan ke kredit (JAN–APR, 1 baris per bulan). Setelah perbaikan ini, saldo antarbulan tersambung.
-10. **Keterangan rusak**: teks seperti `Tue Sep 29 2026 14:00:00 GMT+0700 (Western Indonesia Time)` dikembalikan ke `dd/mm` (contoh `29/09`). Ini ada di semua bulan, ±1.540 sel. Simpan teks asli di `ketAsli` dan tandai `keterangan_diperbaiki`. Keterangan yang tertulis dua kali persis (misalnya di OKT/NOV) dipotong salinan keduanya.
-11. **Saldo**: hitung ulang berurutan (`saldo = sebelumnya − debet + kredit`) mulai dari `saldoAwalSen`. Kalau beda dengan kolom G lebih dari Rp 1, tandai `saldo_beda`. `saldoAkhirSen` = saldo baris terakhir.
+10. **Keterangan rusak**: teks seperti `Tue Sep 29 2026 14:00:00 GMT+0700 (Western Indonesia Time)` dikembalikan ke `dd/mm` (contoh `29/09`). Ini ada di semua bulan, ±1.540 sel. Simpan teks asli di `ketAsli` dan tandai `keterangan_diperbaiki`. Bagian keterangan yang tertulis dua kali persis (±526 baris: MAR 269, OKT 117, JUN 87, NOV 51, APR 2) dipotong salinan keduanya.
+11. **Saldo**: kolom G **tidak** diimpor, karena isinya hanya nilai cache rumus dan ikut salah kalau D/E salah. Hitung ulang berurutan (`saldo = sebelumnya − debet + kredit`) mulai dari `saldoAwalSen`. Cocokkan dengan kolom H (saldo cetak bank) di baris yang punya H: parse teks berkoma (FEB). Selisih > Rp 0,01 ditandai `saldo_beda`, kecuali 3 sel H yang berisi nominal, bukan saldo (MEI baris 429, JUN baris 593–594). `saldoAkhirSen` = saldo baris terakhir.
 12. **Kategori**:
     - Rapikan spasi dan huruf besar. Kosong → `KOSONG`. `VSALES` → `V_SALES`.
     - Simpan nilai aslinya di `kategoriAsal`.
-    - **JUL–DES**: `kategori` = `KOSONG` dan tandai `kategori_diragukan`. Opsi `--pakai-kategori-asal` membatalkan aturan ini.
-    - **APR & MEI**: kategori dipakai, tapi tandai `kategori_diragukan` untuk baris yang berbeda dari saran (lihat no. 13).
+    - **APR, MEI, JUL–DES**: `kategori` = `KOSONG` dan tandai `kategori_diragukan` (3.159 baris yang tadinya berkategori). Opsi `--pakai-kategori-asal` membatalkan aturan ini.
+    - JAN, FEB, MAR, JUN: kategori dipakai apa adanya.
 13. **Saran kategori**: dari bulan yang kategorinya rapi (JAN, FEB, MAR, JUN), buat peta **pihak transaksi → kategori**. Pihak transaksi = nama di akhir keterangan, dipisah DB/CR. Hanya pihak yang muncul ≥ 5 kali dengan ≥ 90% kategori sama yang dipakai. Isi `saran` untuk **setiap** transaksi yang pihaknya ada di peta. Aplikasi hanya menampilkan saran kalau `saran` ≠ `kategori`. Simpan peta ini di `keluaran/peta_saran.csv` supaya bisa diperiksa.
 
 ### Pemeriksaan yang Harus Lolos (`--cek`)
@@ -344,7 +349,8 @@ Kolom tab master: A tanggal, B keterangan pendek, C keterangan lengkap, D debet,
 - [ ] Tidak ada baris yang debet dan kreditnya sama-sama kosong atau sama-sama terisi.
 - [ ] Total kredit per bulan **sebelum** aturan 9 (BUNGA) sama dengan kolom `KREDIT` di `BANK_GLOBAL.xlsx` (selisih ≤ Rp 1). September dikecualikan karena KREDIT-nya kosong di `BANK_GLOBAL`.
 - [ ] Untuk JAN–JUN, total debet per kategori (dari `kategoriAsal`) sama dengan `J1` tab kategori. Pengecualian yang sudah diketahui: PRODUKSI JAN, PRODUKSI FEB, dan PRIBADI FEB. Selisihnya dicatat di laporan.
-- [ ] Saldo akhir bulan = saldo awal bulan berikutnya. Pengecualian yang sudah diketahui: **MEI→JUN** dan **AGU→SEP** selisih ribuan rupiah (kemungkinan biaya bank yang tidak tercatat). Catat di laporan, jangan dipaksa.
+- [ ] Saldo akhir bulan = saldo awal bulan berikutnya, dan saldo hitung = kolom H. Pengecualian yang sudah diketahui: **MEI→JUN** (Rp 871,04) dan **AGU→SEP** (Rp 1.957,02). Mutasi kedua bulan itu tidak memuat baris bunga/pajak bunga di akhir bulan, kemungkinan terpotong saat disalin. Catat di laporan, jangan dipaksa. Kalau e-statement BCA Mei & Agustus 2023 ada, tambahkan baris yang hilang. Kalau tidak, opsi `--penyesuaian` menambah 1 baris `PENYESUAIAN` bertanda `sintetis` per bulan.
+- [ ] Total debet dan kredit SEP sama dengan baris penutup bank (`MUTASI DB` 480 transaksi, `MUTASI CR` 181 transaksi).
 - [ ] Jumlah per `kategoriAsal` mendekati: PRODUKSI 2.484, PRIBADI 2.341, KOSONG 1.764, EXSPEDISI 283, V_SALES 73, BANK 61, NURUL_AINI 30, OPERASIONAL 3.
 
 Urutan kerja:
@@ -385,7 +391,7 @@ Padanan dari kode lama:
 | Scriptlet `daftarBulan` (`Index.html:44-62`) | Dropdown bulan diisi dari koleksi `bulan`, dengan pemilih tahun (siap untuk 2024 dst.). |
 | `judulMap` (`Code.js:31`), menu kategori (`Index.html:70-79`), `masterKategori` (`Index.html:162`) | Dibuat dari `pengaturan/kategori`. |
 | `google.script.run.getDataFromSheet` | `muatBulan(kode)`: `onSnapshot` pada `bulan/{kode}/transaksi` diurutkan `urutan`. Dimuat sekali, disimpan di `Map` memori; perubahan dari pengguna lain langsung terlihat. Berhenti berlangganan saat ganti bulan. |
-| Halaman kategori & `kosong` | Filter di browser atas data bulan di memori (0 baca tambahan). |
+| Halaman kategori & `kosong` | Filter di browser atas data bulan di memori (0 baca tambahan). Parameter baru `?p=kategori&k=BANK` untuk semua kategori, karena `p=bank` sudah berarti Mutasi Bank sehingga kategori BANK tidak punya halaman. Alias lama (`p=pribadi`, `p=produksi`, ...) tetap diterima. |
 | Dashboard dari `DASHBOARD!A2:K13` | Dokumen `bulan` untuk tahun terpilih. TOTAL DEBIT = **semua debet**, kolom BANK ikut ditampilkan. |
 | Footer "TOTAL SALDO (J1)" | Jumlah `debetSen` halaman aktif, dihitung di browser. Halaman bank menampilkan saldo akhir (bukan teks "ONLINE"). |
 | `formatDate` dd/MM | Tetap tampil `dd/MM` di tabel. Tanggal lengkap tersimpan. |
@@ -396,6 +402,9 @@ Yang ditambahkan:
 - Tombol keluar.
 - Aplikasi dibuka sebagai **halaman penuh**, bukan di dalam iframe, karena popup login di iframe sering diblokir. Kode lama memakai `ALLOWALL`; cek apakah aplikasi lama disematkan di `alfan.zasha.online`, lalu ganti dengan tautan biasa.
 - Filter **"Perlu cek"** untuk menampilkan baris bertanda `perluCek`.
+- Sakelar **Debet / Kredit / Semua** di halaman kategori. Default Debet, sama seperti versi lama. Sekitar 1.400 transaksi kredit sudah berkategori dan ±650 belum, tapi di versi lama tidak bisa dilihat di halaman kategori.
+- Semua link memakai URL relatif, karena situs Pages proyek ada di `/<nama-repo>/`, bukan di `/`.
+- Parameter `p` dan `bulan` yang tidak dikenal diarahkan ke dashboard dengan pesan, bukan spinner tanpa henti.
 - `<meta http-equiv="Content-Security-Policy">`, karena GitHub Pages tidak bisa mengatur header. Isinya hanya mengizinkan `self`, `www.gstatic.com`, `cdn.jsdelivr.net`, `apis.google.com`, `*.googleapis.com`, `accounts.google.com`, dan `<project>.firebaseapp.com`.
 - Versi Firebase SDK dan Bootstrap dipin (bukan "latest"), dan memakai atribut `integrity` untuk file jsDelivr.
 
@@ -404,8 +413,13 @@ Bug lama yang **wajib** tidak ikut terbawa:
 - [ ] Keterangan dan nama kategori dimasukkan ke `innerHTML` tanpa escape (`Index.html:192-230`). Pakai `textContent` atau `escapeHtml()`. Di situs publik ini celah pencurian sesi.
 - [ ] Tidak ada penanganan gagal. Semua akses Firestore pakai `try/catch/finally`: pesan error tampil di halaman (bukan `alert`), dan loader selalu disembunyikan.
 - [ ] `filterData()` error kalau keterangan bukan teks (`Index.html:240`).
-- [ ] `colspan="5"` di baris "Tidak ada data", padahal halaman kategori punya 6 kolom (`Index.html:228`).
 - [ ] Tombol paginasi `›` tidak punya batas atas (`Index.html:241`).
+- [ ] Paginasi tetap terlihat di dashboard, karena `d-flex` (Bootstrap, `!important`) mengalahkan `style.display = 'none'` (`Index.html:154`, `:175`). Pakai class `d-none`.
+- [ ] Dropdown aksi memuat kategori halaman yang sedang dibuka. Kalau dipilih, baris hilang dari layar padahal datanya tidak berubah (`Index.html:217`, `:230`). Kecualikan kategori aktif.
+- [ ] Dropdown memuat nilai unik kolom I, termasuk salah ketik `VSALES` yang memindahkan baris ke kategori yatim (`Code.js:70`). Daftar diambil dari `pengaturan/kategori` saja.
+- [ ] Setelah pindah kategori, kata kunci pencarian diabaikan dan halaman tidak dijepit, sehingga halaman terakhir bisa kosong (`Index.html:239`). Pilihan checkbox juga hilang saat ganti halaman.
+- [ ] Tidak ada pencegah klik ganda saat proses simpan (`Index.html:237`). Nonaktifkan tombol selama proses.
+- [ ] Pencarian memakai `onkeyup`, jadi menempel teks dengan mouse tidak memicu pencarian (`Index.html:134`). Pakai event `input`.
 - [ ] Halaman bank memakai kolom B, halaman kategori kolom C (`Code.js:81` vs `:91`). Tampilkan `ketLengkap` di keduanya.
 - [ ] Halaman bank menampilkan baris `SALDO AWAL` sebagai transaksi (`Code.js:81`). Versi baru menampilkannya sebagai info saldo awal di atas tabel.
 
@@ -421,7 +435,7 @@ Selesai jika: login berhasil; akun tanpa peran ditolak; dashboard menampilkan 12
 - [ ] Pilihan **"Belum Kategori"** (`KOSONG`) di dropdown, untuk membatalkan. Versi lama tidak punya ini.
 - [ ] Pindah massal dipotong otomatis per 200 baris, dengan progres yang terlihat.
 - [ ] Kalau gagal: baris **tidak** dihapus dari layar, dan pesan error tampil. Versi lama tetap menghapus baris walau gagal (`Index.html:239`).
-- [ ] **Terima saran**: tombol per baris, dan tombol massal "Terima semua saran di halaman ini". Ini mempercepat pengisian ulang kategori JUL–DES.
+- [ ] **Terima saran**: tombol per baris, dan tombol massal "Terima semua saran di halaman ini". Ini mempercepat pengisian ulang kategori APR, MEI, dan JUL–DES.
 - [ ] Pembaca tidak melihat dropdown, checkbox, dan tombol saran.
 - [ ] Banner "Ringkasan tidak cocok — Perbaiki" untuk admin.
 
@@ -466,7 +480,7 @@ Selesai jika: rekap tahunan cocok dengan `keluaran/ringkasan_2023.csv` (untuk ka
 ## Tahap 7: Operasional dan Data Baru
 
 - [ ] **Backup**: `alat/ekspor.py` membaca semua koleksi lalu menulis JSON + CSV per bulan ke folder lokal **di luar repo** (atau Google Drive pribadi). Jalankan setelah sesi kategorisasi besar dan minimal sebulan sekali. Ekspor otomatis bawaan Google butuh paket Blaze.
-- [ ] **Bulan baru (2024 dst.)**: tambahkan `alat/impor.py --csv <file mutasi BCA> --bulan 2024-01`, memakai `bersih.py` yang sama. Parser dibuat dari **contoh file CSV asli** dari KlikBCA/myBCA. ID transaksi dari CSV = `{bulan}-{16 hex hash isi baris}`, jadi impor ulang file yang sama aman. Kategori awal `KOSONG` + `saran`. Nanti bisa dipindah ke halaman admin (unggah CSV di browser).
+- [ ] **Bulan baru (2024 dst.)**: tambahkan `alat/impor.py --csv <file mutasi BCA> --bulan 2024-01`, memakai `bersih.py` yang sama. Parser dibuat dari **contoh file CSV asli** dari KlikBCA/myBCA. ID transaksi dari CSV = `{bulan}-{16 hex hash isi baris + urutan ke-n di antara baris yang isinya identik}`, jadi impor ulang file yang sama aman. Hash isi saja tidak cukup: 2023 punya 48 transaksi sah yang isinya identik (misalnya 8× tarik ATM yang sama di satu hari). Data jangan pernah di-dedup berdasarkan isi. Kategori awal `KOSONG` + `saran`. Nanti bisa dipindah ke halaman admin (unggah CSV di browser).
 - [ ] Panduan singkat untuk pengguna (1 halaman): login, pindah kategori, terima saran, cetak/unduh laporan.
 - [ ] Setelah semua data aman di Firestore dan ada backup: pindahkan file Excel ke Google Drive pribadi dan hapus dari repo ini.
 
@@ -476,13 +490,13 @@ Selesai jika: rekap tahunan cocok dengan `keluaran/ringkasan_2023.csv` (untuk ka
 
 Hasil audit semua file Excel:
 
-- **Kategori JUL–DES tidak bisa dipercaya.** Kolom kategori AGU **identik** dengan JUL di semua 620 posisi baris. SEP, OKT, NOV, dan DES ±97% identik dengan JUL, dan jumlah PRODUKSI-nya tepat 138 setiap bulan. Ini tanda salin-tempel per posisi baris, bukan per transaksi. Dicek dengan pihak transaksi yang kategorinya konsisten di bulan lain: JAN, FEB, MAR, dan JUN cocok 99–100%, APR 78%, MEI 52%, sedangkan **JUL–DES hanya 25–32%**.
+- **Kategori APR, MEI, dan JUL–DES tidak bisa dipercaya.** Kolom kategori AGU **identik** dengan JUL di semua 620 posisi baris. SEP, OKT, NOV, dan DES ±97% identik dengan JUL, dan jumlah PRODUKSI-nya tepat 138 setiap bulan. Kolom JUL juga 98% sama dengan MEI dan 95% sama dengan APR. Ini tanda salin-tempel per posisi baris, bukan per transaksi. Dicek dengan pihak transaksi yang kategorinya konsisten di bulan lain: JAN, FEB, MAR, dan JUN cocok 99–100%, APR 78%, MEI 52%, sedangkan **JUL–DES hanya 25–32%**.
 - **`BANK_GLOBAL` TOTAL DEBIT hanya menjumlah 3 kategori.** Rumusnya `=SUM(B:D)`, yaitu KOSONG + PRIBADI + PRODUKSI. EXSPEDISI, V_SALES, OPERASIONAL, NURUL_AINI, dan BANK tidak ikut. Akibatnya total pengeluaran di dashboard lama **lebih kecil dari sebenarnya setiap bulan**, sehingga SELISIH juga salah.
 - Kolom KREDIT di `BANK_GLOBAL` diambil dengan `IMPORTRANGE` dari sel `E2` tiap file bulanan, dan nilainya benar. Pengecualiannya **September**: KREDIT-nya kosong sehingga SELISIH = −TOTAL DEBIT.
-- **`J1` di tab kategori tidak selalu cocok dengan tab master**: PRODUKSI JAN & FEB dan PRIBADI FEB lebih kecil dari jumlah baris berkategori itu di tab master.
 - **Transaksi kredit juga diberi kategori**, tapi tidak pernah dijumlahkan di mana pun. Versi baru menjumlahkannya (`kreditSenPerKategori`).
 - **Kategori `BANK`** dipakai di 61 transaksi tapi tidak muncul di dashboard lama.
-- Tanggal bertahun 2026, hari/bulan tertukar di JUN, ±1.540 keterangan rusak, dan baris `BUNGA` di kolom debet sudah ditangani oleh aturan pembersihan di Tahap 2.
+- **`J1` hanya menjumlah debet, dan kurang satu transaksi** di PRODUKSI JAN, PRODUKSI FEB, dan PRIBADI FEB. Rumusnya mulai dari D2, padahal hasil `QUERY` sudah dimulai di baris 1.
+- Tanggal bertahun 2026, hari/bulan tertukar di JUN, ±1.540 keterangan rusak, baris `BUNGA` di kolom debet, dan nominal berupa teks di FEB sudah ditangani oleh aturan pembersihan di Tahap 2.
 
 ---
 
