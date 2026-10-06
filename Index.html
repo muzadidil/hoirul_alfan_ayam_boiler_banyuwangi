@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <base target="_top">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+
+  <style>
+    :root { --bca-blue: #005aa9; --bca-light: #f0f4f8; --bca-gold: #f9d923; }
+    body { background-color: var(--bca-light); font-family: 'Segoe UI', Tahoma, sans-serif; font-size: 13px; padding-bottom: 95px; }
+
+    /* NAV BAR */
+    .nav-zasha { background: var(--bca-blue); box-shadow: 0 2px 5px rgba(0,0,0,0.2); padding: 10px; display: flex; gap: 10px; position: relative; z-index: 1050; }
+    .btn-dropdown-zasha { background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(255,255,255,0.3); width: 100%; display: flex; justify-content: space-between; align-items: center; font-size: 11px; text-transform: uppercase; padding: 8px 12px; }
+    .btn-dropdown-zasha:hover { background: rgba(255,255,255,0.2); color: var(--bca-gold); }
+
+    .bca-card { background: #fff; border-radius: 6px; box-shadow: 0 2px 6px rgba(0,0,0,0.05); border-top: 5px solid var(--bca-blue); margin-top: 10px; }
+    .table-bca thead { background-color: var(--bca-blue); color: #fff; }
+    .angka { font-family: 'Courier New', Courier, monospace; font-weight: bold; text-align: right; }
+    .action-bar { background: #fff; padding: 10px; border-bottom: 1px solid #ddd; position: sticky; top: 0; z-index: 100; display: flex; gap: 8px; align-items: center; }
+
+    .bca-footer { position: fixed; bottom: 0; left: 0; right: 0; background: #333; color: #fff; padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; z-index: 1000; }
+    .total-amt { color: var(--bca-gold); font-size: 16px; font-weight: bold; }
+    .btn-floating { background-color: var(--bca-blue); border: 1px solid var(--bca-gold); color: white; border-radius: 20px; font-size: 10px; font-weight: bold; padding: 5px 15px; text-decoration: none; transition: 0.3s; }
+
+    /* DASHBOARD SIMPLE STYLE */
+    .summary-card { border-radius: 6px; padding: 12px 15px; color: white; display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    .card-kredit { background-color: #1e8e3e; }
+    .card-debit { background-color: #d93025; }
+    .card-selisih { background-color: var(--bca-blue); }
+    .summary-title { font-size: 11px; text-transform: uppercase; font-weight: bold; opacity: 0.9; }
+    .summary-value { font-size: 16px; font-weight: bold; font-family: 'Courier New', Courier, monospace; }
+
+    .table-dash th { background-color: #f1f5f9; color: #475569; font-size: 10px; text-transform: uppercase; white-space: nowrap; text-align: center; }
+    .table-dash td { vertical-align: middle; white-space: nowrap; font-size: 11px; }
+  </style>
+</head>
+<body>
+
+<div class="toast-container p-3 top-0 end-0" style="z-index: 2000;"><div id="liveToast" class="toast shadow"><div class="toast-body py-2 fw-bold text-primary" id="toastMessage"></div></div></div>
+
+<?
+  var daftarBulan = [
+    { kode: 'DASHBOARD', nama: '📊 DASHBOARD' },
+    { kode: 'JAN_2023', nama: 'Januari' },
+    { kode: 'FEB_2023', nama: 'Februari' },
+    { kode: 'MAR_2023', nama: 'Maret' },
+    { kode: 'APR_2023', nama: 'April' },
+    { kode: 'MEI_2023', nama: 'Mei' },
+    { kode: 'JUN_2023', nama: 'Juni' },
+    { kode: 'JUL_2023', nama: 'Juli' },
+    { kode: 'AGU_2023', nama: 'Agustus' },
+    { kode: 'SEP_2023', nama: 'September' },
+    { kode: 'OKT_2023', nama: 'Oktober' },
+    { kode: 'NOV_2023', nama: 'November' },
+    { kode: 'DES_2023', nama: 'Desember' }
+  ];
+  var namaBulanAktif = "Pilih Bulan";
+  for (var i = 0; i < daftarBulan.length; i++) { if (daftarBulan[i].kode === bulan) { namaBulanAktif = daftarBulan[i].nama; break; } }
+?>
+
+<div class="nav-zasha">
+  <!-- Dropdown Kategori -->
+  <div class="dropdown" id="menu-kategori" style="display: none; flex: 1;">
+    <button class="btn btn-dropdown-zasha fw-bold" type="button" data-bs-toggle="dropdown">
+      <span><i class="bi bi-tags-fill me-1"></i> <?= judul ?></span> <i class="bi bi-chevron-down"></i>
+    </button>
+    <ul class="dropdown-menu shadow w-100" style="font-size: 12px;">
+      <li><a class="dropdown-item" href="<?= url ?>?p=bank&bulan=<?= bulan ?>">🏦 Mutasi Bank</a></li>
+      <li><a class="dropdown-item" href="<?= url ?>?p=kosong&bulan=<?= bulan ?>">📄 Belum Kategori</a></li>
+      <li><a class="dropdown-item" href="<?= url ?>?p=pribadi&bulan=<?= bulan ?>">👤 Pribadi</a></li>
+      <li><a class="dropdown-item" href="<?= url ?>?p=produksi&bulan=<?= bulan ?>">🏭 Produksi</a></li>
+      <li><a class="dropdown-item" href="<?= url ?>?p=exspedisi&bulan=<?= bulan ?>">🚚 Exspedisi</a></li>
+      <li><a class="dropdown-item" href="<?= url ?>?p=v_sales&bulan=<?= bulan ?>">💼 V_Sales</a></li>
+      <li><a class="dropdown-item" href="<?= url ?>?p=operasional&bulan=<?= bulan ?>">⚙️ Operasional</a></li>
+      <li><a class="dropdown-item" href="<?= url ?>?p=nurul_aini&bulan=<?= bulan ?>">👩 Nurul Aini</a></li>
+    </ul>
+  </div>
+
+  <!-- Dropdown Bulan -->
+  <div class="dropdown" id="menu-bulan" style="width: 100%;">
+    <button class="btn btn-dropdown-zasha fw-bold" type="button" data-bs-toggle="dropdown">
+      <span><i class="bi bi-calendar3 me-1"></i> <?= namaBulanAktif ?></span> <i class="bi bi-chevron-down"></i>
+    </button>
+    <ul class="dropdown-menu shadow w-100" style="font-size: 12px; max-height: 250px; overflow-y: auto;">
+      <? for (var i = 0; i < daftarBulan.length; i++) { ?>
+        <li><a class="dropdown-item <?= (daftarBulan[i].kode === bulan) ? 'active' : '' ?>" href="<?= url ?>?p=<?= (daftarBulan[i].kode === 'DASHBOARD') ? 'bank' : page ?>&bulan=<?= daftarBulan[i].kode ?>"><?= daftarBulan[i].nama ?></a></li>
+      <? } ?>
+    </ul>
+  </div>
+</div>
+
+<!-- ======================= VIEW DASHBOARD SIMPEL ======================= -->
+<div id="view-dashboard" class="container-fluid mt-3 mb-5" style="display: none;">
+  <div id="loader-dash" class="text-center py-5"><div class="spinner-border text-primary"></div><br><small>Menarik Data...</small></div>
+
+  <div id="content-dash" style="display: none;">
+    <!-- KARTU RINGKASAN BERSUSUN LURUS -->
+    <div class="summary-card card-kredit">
+      <div class="summary-title"><i class="bi bi-arrow-down-circle"></i> Pemasukan (Kredit)</div>
+      <div class="summary-value" id="card-kredit">Rp 0</div>
+    </div>
+
+    <div class="summary-card card-debit">
+      <div class="summary-title"><i class="bi bi-arrow-up-circle"></i> Pengeluaran (Debit)</div>
+      <div class="summary-value" id="card-debit">Rp 0</div>
+    </div>
+
+    <div class="summary-card card-selisih mt-2">
+      <div class="summary-title"><i class="bi bi-wallet2"></i> Total Selisih</div>
+      <div class="summary-value text-warning" id="card-selisih" style="font-size: 20px;">Rp 0</div>
+    </div>
+
+    <!-- TABEL RINCIAN -->
+    <div class="card border-0 shadow-sm table-responsive mt-3">
+      <table class="table table-bordered table-hover table-dash mb-0">
+        <thead>
+          <tr>
+            <th class="bg-primary text-white position-sticky start-0">BLN</th>
+            <th>KSNG</th><th>PRIBADI</th><th>PRODUKSI</th><th>EXSPEDISI</th><th>V_SALES</th><th>OPR</th><th>N_AINI</th>
+            <th class="text-danger">DEBIT</th><th class="text-success">KREDIT</th><th class="text-primary">SELISIH</th>
+          </tr>
+        </thead>
+        <tbody id="data-dashboard"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ======================= VIEW NORMAL (TRANSAKSI BULANAN) ======================= -->
+<div id="view-normal" style="display: none;">
+  <div class="action-bar"><div class="input-group input-group-sm"><span class="input-group-text bg-white">🔍</span><input type="text" id="searchInput" class="form-control" placeholder="Cari..." onkeyup="filterData()"></div><button class="btn btn-primary btn-sm px-3" id="btnBatch" style="display:none" data-bs-toggle="modal" data-bs-target="#bulkModal">Proses (<span id="countCheck">0</span>)</button></div>
+  <div class="container-fluid mb-5"><div class="bca-card">
+    <div class="p-2 border-bottom d-flex justify-content-between align-items-center bg-light"><div><h6 class="mb-0 fw-bold text-primary text-uppercase"><?= judul ?></h6><small class="text-muted"><?= namaBulanAktif ?></small></div></div>
+    <div id="loader" class="text-center py-5"><div class="spinner-border text-primary spinner-border-sm"></div></div>
+    <div id="content" style="display:none" class="table-responsive">
+      <table class="table table-hover table-bca mb-0">
+        <thead><tr><? if (page != 'bank') { ?><th width="30"><input type="checkbox" onclick="toggleAll(this)"></th><? } ?><th>Tgl</th><th>Keterangan</th><? if (page == 'bank') { ?><th class="text-end">Debet</th><th class="text-end">Kredit</th><th class="text-end">Saldo</th><? } else { ?><th class="text-end">Nominal</th><th class="text-center">Aksi</th><? } ?></tr></thead>
+        <tbody id="data-tabel"></tbody>
+      </table>
+    </div>
+  </div></div>
+</div>
+
+<!-- MODAL BATCH -->
+<div class="modal fade" id="bulkModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-sm"><div class="modal-content border-0 shadow"><div class="modal-header pb-0 border-0"><h6 class="fw-bold">Pindah Massal</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body py-3"><select id="bulkKategori" class="form-select form-select-sm"></select></div><div class="modal-footer pt-0 border-0"><button class="btn btn-primary btn-sm w-100" onclick="confirmBulk()">Konfirmasi</button></div></div></div></div>
+
+<!-- FOOTER -->
+<div class="bca-footer">
+  <div class="small" id="footer-left" style="display: none;"><span class="d-block text-muted" style="font-size:9px">TOTAL SALDO (J1):</span><span id="footer-total" class="total-amt">Rp 0</span></div>
+  <div><a href="https://alfan.zasha.online/bulan/<?= (bulan==='DASHBOARD') ? 'index' : namaBulanAktif.toLowerCase() ?>.php" class="btn-floating shadow-sm"><i class="bi bi-house-door"></i> HOME</a></div>
+  <div class="d-flex gap-2" id="footer-right" style="display: none;"><button class="btn btn-outline-light btn-sm py-0" onclick="changePage(-1)">‹</button><span id="pageInfo" class="align-self-center fw-bold">1</span><button class="btn btn-outline-light btn-sm py-0" onclick="changePage(1)">›</button></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+  let rawData = [], filteredData = [], currentPage = 1, rowsPerPage = 20, currentTotal = 0;
+  const pageType = "<?= page ?>", bulan = "<?= bulan ?>", fmt = new Intl.NumberFormat('id-ID');
+  let optionKategoriHtml = '';
+  const masterKategori = ["PRIBADI", "PRODUKSI", "EXSPEDISI", "V_SALES", "OPERASIONAL", "NURUL_AINI", "BANK"];
+
+  // MENGATUR TAMPILAN LAYAR DASHBOARD VS NORMAL
+  if (bulan === 'DASHBOARD') {
+    document.getElementById('view-dashboard').style.display = 'block';
+    document.getElementById('menu-bulan').style.width = '100%';
+    document.getElementById('menu-bulan').style.flex = 'none';
+  } else {
+    document.getElementById('view-normal').style.display = 'block';
+    document.getElementById('menu-kategori').style.display = 'block';
+    document.getElementById('menu-bulan').style.width = 'auto';
+    document.getElementById('menu-bulan').style.flex = '1';
+    document.getElementById('footer-left').style.display = 'block';
+    document.getElementById('footer-right').style.display = 'flex';
+  }
+
+  window.onload = function() { google.script.run.withSuccessHandler(initData).getDataFromSheet(pageType, bulan); };
+
+  function initData(res) {
+    if (res.error) return alert(res.error);
+
+    // LOGIKA DASHBOARD (Sudah kebal NaN)
+    if (res.isDashboard) {
+      let totalDebit = 0, totalKredit = 0, totalSelisih = 0, html = '';
+
+      res.data.forEach(row => {
+        totalDebit += Number(row.debit) || 0;
+        totalKredit += Number(row.kredit) || 0;
+        totalSelisih += Number(row.selisih) || 0;
+
+        html += `<tr><td class="fw-bold bg-white position-sticky start-0 border-end text-primary">${row.bulan}</td>
+          <td class="angka text-muted">${row.kosong ? fmt.format(row.kosong) : '-'}</td>
+          <td class="angka">${fmt.format(row.pribadi || 0)}</td>
+          <td class="angka">${fmt.format(row.produksi || 0)}</td>
+          <td class="angka">${fmt.format(row.exspedisi || 0)}</td>
+          <td class="angka">${fmt.format(row.v_sales || 0)}</td>
+          <td class="angka">${fmt.format(row.operasional || 0)}</td>
+          <td class="angka">${fmt.format(row.nurul_aini || 0)}</td>
+          <td class="angka text-danger">${fmt.format(row.debit || 0)}</td>
+          <td class="angka text-success">${fmt.format(row.kredit || 0)}</td>
+          <td class="angka text-primary fw-bold">${fmt.format(row.selisih || 0)}</td></tr>`;
+      });
+
+      document.getElementById('card-kredit').innerText = "Rp " + fmt.format(totalKredit);
+      document.getElementById('card-debit').innerText = "Rp " + fmt.format(totalDebit);
+      document.getElementById('card-selisih').innerText = "Rp " + fmt.format(totalSelisih);
+      document.getElementById('data-dashboard').innerHTML = html;
+
+      document.getElementById('loader-dash').style.display = 'none';
+      document.getElementById('content-dash').style.display = 'block';
+      return;
+    }
+
+    // LOGIKA NORMAL BULANAN
+    let gabunganKategori = [...new Set([...masterKategori, ...(res.categories || [])])];
+    optionKategoriHtml = gabunganKategori.map(cat => `<option value="${cat}">${cat}</option>`).join('');
+    document.getElementById('bulkKategori').innerHTML = optionKategoriHtml;
+
+    if (pageType === 'bank') { rawData = res.data || []; document.getElementById('footer-total').innerText = "ONLINE"; }
+    else { rawData = res.transactions || []; currentTotal = res.total || 0; document.getElementById('footer-total').innerText = "Rp " + fmt.format(currentTotal); }
+    filteredData = [...rawData]; renderTable();
+    document.getElementById('loader').style.display = 'none'; document.getElementById('content').style.display = 'block';
+  }
+
+  function renderTable() {
+    const tbody = document.getElementById('data-tabel'), start = (currentPage - 1) * rowsPerPage, paginated = filteredData.slice(start, start + rowsPerPage);
+    let html = paginated.length === 0 ? '<tr><td colspan="5" class="text-center py-4 text-muted small italic">Tidak ada data</td></tr>' : paginated.map(item => {
+      if (pageType === 'bank') return `<tr><td class="text-center">${item.tanggal}</td><td style="font-size:11px">${item.keterangan}</td><td class="angka text-danger">${fmt.format(item.debet)}</td><td class="angka text-success">${fmt.format(item.kredit)}</td><td class="angka text-primary">${fmt.format(item.saldo)}</td></tr>`;
+      return `<tr><td class="text-center"><input type="checkbox" class="rowCheck" value="${item.baris}" onclick="updateCount()"></td><td class="text-center">${item.tanggal}</td><td style="font-size:11px">${item.keterangan}</td><td class="angka text-danger">${fmt.format(item.nominal)}</td><td class="text-center"><select class="form-select form-select-sm border-primary text-primary" style="font-size:10px; padding:2px; font-weight:bold; width: 75px;" onchange="singleUpdate(${item.baris}, this.value)"><option value="" disabled selected>Pilih...</option>${optionKategoriHtml}</select></td></tr>`;
+    }).join('');
+    tbody.innerHTML = html; document.getElementById('pageInfo').innerText = currentPage; updateCount();
+  }
+
+  function toggleAll(src) { document.querySelectorAll('.rowCheck').forEach(c => c.checked = src.checked); updateCount(); }
+  function updateCount() { const count = document.querySelectorAll('.rowCheck:checked').length; document.getElementById('countCheck').innerText = count; document.getElementById('modalCount').innerText = count; document.getElementById('btnBatch').style.display = count > 0 ? 'block' : 'none'; }
+  function confirmBulk() { const sel = Array.from(document.querySelectorAll('.rowCheck:checked')).map(c => c.value), tgt = document.getElementById('bulkKategori').value; document.getElementById('content').style.opacity = "0.5"; google.script.run.withSuccessHandler(res => updateUI(res, sel)).updateBatchKategori(sel, tgt, bulan, pageType); }
+  function singleUpdate(baris, tgt) { if(!tgt) return; document.getElementById('content').style.opacity = "0.5"; google.script.run.withSuccessHandler(res => updateUI(res, [baris])).updateBatchKategori([baris], tgt, bulan, pageType); }
+  function updateUI(res, removed) { document.getElementById('toastMessage').innerText = res.message; new bootstrap.Toast(document.getElementById('liveToast')).show(); rawData = rawData.filter(i => !removed.includes(i.baris.toString()) && !removed.includes(i.baris)); filteredData = [...rawData]; document.getElementById('footer-total').innerText = "Rp " + fmt.format(res.newTotal); renderTable(); document.getElementById('content').style.opacity = "1"; bootstrap.Modal.getInstance(document.getElementById('bulkModal'))?.hide(); }
+  function filterData() { const val = document.getElementById('searchInput').value.toLowerCase(); filteredData = rawData.filter(i => i.keterangan.toLowerCase().includes(val)); currentPage = 1; renderTable(); }
+  function changePage(s) { if(currentPage+s > 0) { currentPage+=s; renderTable(); window.scrollTo(0,0); } }
+</script>
+</body>
+</html>
